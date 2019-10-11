@@ -214,8 +214,7 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
 
 
 def tag(model: DeepEosModel, text_file: Union[str, Path], vocabulary_path: Union[str, Path], batch_size=32,
-        window_size=5,
-        return_indices=False, use_default_markers=True,
+        window_size=5, return_indices=False, use_default_markers=True,
         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     with open(vocabulary_path, 'rb') as f:
         vocabulary = pickle.load(f)
