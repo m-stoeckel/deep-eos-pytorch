@@ -7,7 +7,7 @@ import pickle
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Union, Iterable
+from typing import Union, Iterable, List
 
 import numpy as np
 from torch.utils.data import Dataset, Subset
@@ -264,3 +264,18 @@ class EosDataset(Dataset):
         """
         with open(vocab_filename, 'rb') as f:
             self.char_2_id_dict = pickle.load(f)
+
+
+class ListDataset(Dataset):
+    def __init__(self, input: List[str]):
+        super(ListDataset, self).__init__()
+        self.data = input
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)
