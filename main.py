@@ -6,7 +6,7 @@ import torch
 from torch import nn as nn, optim as optim
 
 from dataset import EosDataset
-from model import DeepEosModel, train, evaluate
+from model import DeepEosModel, train, evaluate, tag
 
 
 def train_multi():
@@ -126,7 +126,7 @@ def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cro
     torch.save(model, Path('biofid_models/').joinpath(model_name + '.h5'))
 
 
-if __name__ == '__main__':
+def temp():
     # model = train_multi()
     model = str(Path('multi.SETIMES2').joinpath('best_model.pt'))
     model = DeepEosModel.load(model).cuda()
@@ -171,3 +171,11 @@ if __name__ == '__main__':
     #     window_size=6
     # )
     # fine_tune(model, vocab_path, test_data)
+
+
+if __name__ == '__main__':
+    model = str(Path('multi.SETIMES2').joinpath('best_model.pt'))
+    model = DeepEosModel.load(model).cuda()
+    print(model)
+
+    print(tag(model, 'data/plain.txt', vocabulary_path='multi.SETIMES2/multi.SETIMES2.vocab', window_size=6))
