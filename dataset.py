@@ -1,7 +1,13 @@
+"""
+Dataset class and functions for the PyTorch implementation of DeepEOS.
+"""
+__author__ = 'Manuel Stoeckel'
+
 import pickle
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Union, Iterable
 
 import numpy as np
 from torch.utils.data import Dataset, Subset
@@ -13,34 +19,59 @@ class EosDataset(Dataset):
     PyTorch Dataset subclass for deep-eos.
     """
 
-    def __init__(self, train_path, split_dev=True, window_size=5, min_freq=1, save_vocab: Path = None,
-                 load_vocab: Path = None, shuffle_input=True, shuffle_dev=True):
+    def __init__(self, train_path: Union[str, Iterable], split_dev=True, window_size=5, min_freq=1,
+                 save_vocab: Path = None, load_vocab: Path = None, shuffle_input=True, shuffle_dev=True,
+                 use_default_markers=True, remove_duplicates=True):
         """
+        PyTorch Dataset subclass for deep-eos.
 
-        :param train_path:
-        :param window_size:
-        :param min_freq:c
-        :param save_vocab:
-        :param load_vocab:
+        :param train_path: A single or a list of file paths to load as training data.
+        :param split_dev: If True, split 10% of the corpus from the training data as development data.
+        :param window_size: The window size around EOS characters.
+        :param min_freq: The minimum frequency of characters to be considered in the given window.
+        :param save_vocab: If a Path is given, the vocabulary will be saved here.
+        :param load_vocab: If a Path is given, the vocabulary will be loaded from here.
+        :param shuffle_input: If True, shuffle the input corpus lines prior to EOS extraction.
+        :param shuffle_dev: If True, return a random subsample instead of the last 10%.
+        :param use_default_markers: If False, use extended EOS markers including more characters.
+        :param remove_duplicates: If True, remove all duplicates samples.
         """
         super(EosDataset, self).__init__()
-        with open(train_path, 'r', encoding='utf8') as f:
-            training_corpus = f.read()
 
-        if shuffle_input:
-            split = training_corpus.split("\n")
-            np.random.shuffle(split)
-            training_corpus = "\n".join(split)
+        if type(train_path) is str:
+            tq = tqdm(desc="Loading corpus", total=1)
+            with open(train_path, 'r', encoding='utf8') as f:
+                training_corpus = f.read()
 
-        data_set_char = self.build_data_set_char(training_corpus, window_size)
-        print(data_set_char[:5], data_set_char[-5:])
+            if shuffle_input:
+                split = training_corpus.split("\n")
+                np.random.shuffle(split)
+                training_corpus = "\n".join(split)
+
+            data_set_char = EosDataset.build_data_set_char(training_corpus, window_size, use_default_markers)
+            tq.update()
+            tq.close()
+        else:
+            data_set_char = []
+            for path in tqdm(train_path, desc="Loading corpus"):
+                with open(path, 'r', encoding='utf8') as f:
+                    training_corpus = f.read()
+
+                if shuffle_input:
+                    split = training_corpus.split("\n")
+                    np.random.shuffle(split)
+                    training_corpus = "\n".join(split)
+
+                data_set_char.extend(EosDataset.build_data_set_char(training_corpus, window_size, use_default_markers))
+
+        if remove_duplicates:
+            data_set_char = list(dict.fromkeys(data_set_char))
 
         if load_vocab is None:
-            self.char_2_id_dict = self.build_char_2_id_dict(data_set_char, min_freq)
+            self.char_2_id_dict = EosDataset.build_char_2_id_dict(data_set_char, min_freq)
 
             if save_vocab is not None:
                 self.vocab_size = len(self.char_2_id_dict)
-                print(f"Vocabulary size: {self.vocab_size}")
                 self.save_vocab(save_vocab)
         else:
             self.load_vocab(load_vocab)
@@ -85,7 +116,7 @@ class EosDataset(Dataset):
         char_freq = defaultdict(int)
         char_2_id_table = {}
 
-        for char in [char for label, seq in data_set_char for char in seq]:
+        for char in tqdm([char for label, seq in data_set_char for char in seq], desc="Building vocabulary"):
             char_freq[char] += 1
 
         id_counter = 1
@@ -133,7 +164,7 @@ class EosDataset(Dataset):
         return data_set
 
     @staticmethod
-    def build_data_set_char(t, window_size):
+    def build_data_set_char(t, window_size, use_default_marker=True):
         """
         Builds data set from corpus
 
@@ -143,23 +174,25 @@ class EosDataset(Dataset):
 
         :param t: Input text
         :param window_size: The window size for the current model
+        :param use_default_marker: If false, use expanded EOS marker definition
         :return: A data set which contains char sequences as feature vectors
         """
+        eos = r'.:?!;' if use_default_marker else r'.:?!;”“"»'
 
         data_set_char_eos = \
             [(1.0, t[m.start() - window_size:m.start()].replace("\n", " ") +
               t[m.start():m.start() + window_size + 1].replace("\n", " "))
-             for m in re.finditer('[.:?!;”“"»)][^\n]?[\n]', t)]
+             for m in re.finditer(f'[{eos}][^\n]?[\n]', t)]
 
         data_set_char_neos = \
             [(0.0, t[m.start() - window_size:m.start()].replace("\n", " ") +
               t[m.start():m.start() + window_size + 1].replace("\n", " "))
-             for m in re.finditer('[.:?!;”“"»)][^\s]?[ ]+', t)]
+             for m in re.finditer(f'[{eos}][^\\s]?[ ]+', t)]
 
         return data_set_char_eos + data_set_char_neos
 
     @staticmethod
-    def build_potential_eos_list(t, window_size):
+    def build_potential_eos_list(t, window_size, use_default_markers=True):
         """
         epBuilds a list of potential eos from a given text
 
@@ -170,18 +203,18 @@ class EosDataset(Dataset):
 
         :param t: Input text
         :param window_size: The window size for the current model
+        :param use_default_markers: If false, use expanded EOS marker definition
         :return: A list of a pair, like:
             [(1.0, "eht Iv")]
           So the first position in the pair indicates the start position for a
           potential eos. The second position holds the extracted character sequence.
         """
 
-        PUNCT = '[\(\)\u0093\u0094`“”\"›〈⟨〈<‹»«‘’–\'``'']*'
-        EOS = r'([.:?!;])'
+        punct = '[()\u0093\u0094`“”\"›〈⟨〈<‹»«‘’–\'``'']*'
+        eos = r'.:?!;' if use_default_markers else r'.:?!;”“"»'
 
         eos_positions = [(m.start())
-                         for m in re.finditer(r'([.:?!;”“"»)])(\s+' + PUNCT + '|' +
-                                              PUNCT + '\s+|[\s\n]+)', t)]
+                         for m in re.finditer(f'([{eos}])(\\s+' + punct + '|' + punct + '\\s+|[\\s\n]+)', t)]
 
         # Lets extract 2* window_size before and after eos position and remove
         # punctuation
@@ -195,8 +228,8 @@ class EosDataset(Dataset):
             cleaned_left_context = left_context
             cleaned_right_context = right_context
 
-            # cleaned_left_context = re.sub(PUNCT, '', left_context)
-            # cleaned_right_context = re.sub(PUNCT, '', right_context)
+            # cleaned_left_context = re.sub(punct, '', left_context)
+            # cleaned_right_context = re.sub(punct, '', right_context)
 
             # Also replace multiple whitespaces (use *only* one whitespace)
             cleaned_left_context = re.sub('\s+', ' ', cleaned_left_context)
