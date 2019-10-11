@@ -1,6 +1,10 @@
 """
 Model class and functions for the PyTorch implementation of DeepEOS.
 """
+import pickle
+
+import numpy as np
+
 __author__ = 'Manuel Stoeckel'
 
 from pathlib import Path
@@ -13,7 +17,7 @@ from sklearn.metrics import f1_score, precision_score, recall_score
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import EosDataset
+from dataset import EosDataset, ListDataset
 from util import AverageMeter
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -207,3 +211,39 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
         return f1
     else:
         return precision
+
+
+def tag(model: DeepEosModel, text_file: Union[str, Path], vocabulary_path: Union[str, Path], batch_size=32,
+        window_size=5,
+        return_indices=False, use_default_markers=True,
+        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
+    with open(vocabulary_path, 'rb') as f:
+        vocabulary = pickle.load(f)
+
+    peos_list = []
+    with open(text_file, 'r', encoding='utf8') as f:
+        text = f.read()
+        peos_list.extend(EosDataset.build_potential_eos_list(text, window_size, use_default_markers))
+        text = np.asarray(list(text), dtype=str)
+
+    dataset = ListDataset(EosDataset.build_data_set(peos_list, vocabulary, window_size))
+
+    ret_idx = []
+    model.eval()
+    dataloader = DataLoader(dataset, batch_size=batch_size)
+    with tqdm(dataloader, total=len(dataloader), desc="Tagging") as tq:
+        for batch_no, (indices, x_tag) in enumerate(tq):
+            x_tag = x_tag.long().to(device)
+            prediction = model(x_tag) >= 0.5
+
+            zipped = zip(indices.squeeze().int().cpu().tolist(), prediction.squeeze().cpu().tolist())
+            true_indices = [idx + 1 for idx, _ in filter(lambda p: p[1], zipped)]
+            if return_indices:
+                ret_idx.extend(true_indices)
+            else:
+                text[np.array(true_indices)] = '\n'
+
+    if return_indices:
+        return ret_idx
+    else:
+        return "".join(text)
