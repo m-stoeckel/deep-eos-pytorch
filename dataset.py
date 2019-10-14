@@ -21,7 +21,7 @@ class EosDataset(Dataset):
 
     def __init__(self, train_path: Union[str, Iterable], split_dev=True, window_size=5, min_freq=1,
                  save_vocab: Path = None, load_vocab: Path = None, shuffle_input=True, shuffle_dev=True,
-                 use_default_markers=True, remove_duplicates=True):
+                 use_default_markers=True, remove_duplicates=True, verbose=True):
         """
         PyTorch Dataset subclass for deep-eos.
 
@@ -35,11 +35,12 @@ class EosDataset(Dataset):
         :param shuffle_dev: If True, return a random subsample instead of the last 10%.
         :param use_default_markers: If False, use extended EOS markers including more characters.
         :param remove_duplicates: If True, remove all duplicates samples.
+        :param verbose: If False, disable tqdm progress bars.
         """
         super(EosDataset, self).__init__()
 
         if type(train_path) is str:
-            tq = tqdm(desc="Loading corpus", total=1)
+            tq = tqdm(desc="Loading corpus", total=1, ascii=True, disable=not verbose)
             with open(train_path, 'r', encoding='utf8') as f:
                 training_corpus = f.read()
 
@@ -53,7 +54,7 @@ class EosDataset(Dataset):
             tq.close()
         else:
             data_set_char = []
-            for path in tqdm(train_path, desc="Loading corpus"):
+            for path in tqdm(train_path, desc="Loading corpus", ascii=True, disable=not verbose):
                 with open(path, 'r', encoding='utf8') as f:
                     training_corpus = f.read()
 
@@ -68,7 +69,7 @@ class EosDataset(Dataset):
             data_set_char = list(dict.fromkeys(data_set_char))
 
         if load_vocab is None:
-            self.char_2_id_dict = EosDataset.build_char_2_id_dict(data_set_char, min_freq)
+            self.char_2_id_dict = EosDataset.build_char_2_id_dict(data_set_char, min_freq, verbose)
 
             if save_vocab is not None:
                 self.vocab_size = len(self.char_2_id_dict)
@@ -98,7 +99,7 @@ class EosDataset(Dataset):
         return len(self.data)
 
     @staticmethod
-    def build_char_2_id_dict(data_set_char, min_freq):
+    def build_char_2_id_dict(data_set_char, min_freq, verbose=True):
         """
         Builds a char_to_id dictionary
 
@@ -111,12 +112,14 @@ class EosDataset(Dataset):
 
         :param data_set_char: The input data set (consisting of char sequences)
         :param min_freq: Defines the minimum frequecy a char must appear in data set
+        :param verbose: If False, disable tqdm progress bars.
         :return: char_2_id dictionary
         """
         char_freq = defaultdict(int)
         char_2_id_table = {}
 
-        for char in tqdm([char for label, seq in data_set_char for char in seq], desc="Building vocabulary"):
+        chars = [char for label, seq in data_set_char for char in seq]
+        for char in tqdm(chars, desc="Building vocabulary", ascii=True, disable=not verbose):
             char_freq[char] += 1
 
         id_counter = 1
@@ -128,7 +131,7 @@ class EosDataset(Dataset):
         return char_2_id_table
 
     @staticmethod
-    def build_data_set(data_set_char, char_2_id_dict, window_size):
+    def build_data_set(data_set_char, char_2_id_dict, window_size, verbose=True):
         """
         Builds a "real" data set with numpy compatible feature vectors
 
@@ -141,12 +144,13 @@ class EosDataset(Dataset):
         :param data_set_char: The input data set (consisting of char sequences)
         :param char_2_id_dict: The char_to_id dictionary
         :param window_size: The window size for the current model
+        :param verbose: If False, disable tqdm progress bars.
         :return: A data set which contains numpy compatible feature vectors
         """
 
         data_set = []
 
-        for label, char_sequence in tqdm(data_set_char, desc="Building dataset"):
+        for label, char_sequence in tqdm(data_set_char, desc="Building dataset", ascii=True, disable=not verbose):
             ids = []
 
             if len(char_sequence) == 2 * window_size + 1:

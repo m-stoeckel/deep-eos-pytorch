@@ -137,24 +137,39 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
     for epoch in range(epochs):
         model.train()
         total_batches = len(train_loader)
-        average = AverageMeter()
-        with tqdm(train_loader, total=total_batches, desc=f"Epoch {epoch + 1}") as tq:
+        loss_meter = AverageMeter()
+        score_meter = AverageMeter()
+        with tqdm(train_loader, total=total_batches, desc=f"Epoch {epoch + 1}", ascii=True) as tq:
             for batch_no, (y_train, x_train) in enumerate(tq):
+                y_train = y_train.float().to(device)
                 x_train = x_train.long().to(device)
 
                 model.rnn.flatten_parameters()
-                prediction = model(x_train)
+                prediction = model(x_train).squeeze()
 
                 optimizer.zero_grad()
-                loss = criterion(prediction.squeeze(), y_train.float().to(device))
+                loss = criterion(prediction, y_train)
                 loss.backward()
                 optimizer.step()
 
-                average.update(loss.item())
-                tq.set_postfix_str(f"loss: {average.avg:0.5f} ({loss.item():0.5f})", True)
+                with torch.no_grad():
+                    y_eval = y_train.bool().cpu().detach().tolist()
+                    pred_eval = (prediction >= 0.5).cpu().detach().tolist()
+                    if eval_metric is 'precision':
+                        score = precision_score(y_eval, pred_eval, pos_label=True)
+                    elif eval_metric is 'recall':
+                        score = recall_score(y_eval, pred_eval, pos_label=True)
+                    else:
+                        score = f1_score(y_eval, pred_eval, pos_label=True)
+
+                loss_meter.update(loss.item())
+                score_meter.update(score)
+                tq.set_postfix_str(f"loss: {loss_meter.avg:0.4f} ({loss.item():0.4f}), "
+                                   f"{eval_metric}: {score_meter.avg:0.4f} ({score:0.4f})", True)
 
         if evaluate_after_epoch and dev_dataset is not None:
-            score = evaluate(model, dev_dataset, eval_batch_size, metric=eval_metric, device=device)
+            print("Development dataset - ", end="")
+            score = evaluate(model, dev_dataset, eval_batch_size, metric=eval_metric, device=device, verbose=False)
 
             if save_checkpoints and base_path is not None and score > best_score:
                 best_score = score
@@ -168,14 +183,14 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
     if epochs > 1 and evaluate_after_epoch and dev_dataset is not None and save_checkpoints and base_path is not None:
         print(
             "Loading best scoring model\n"
-            f"{eval_metric.title()}: {best_score * 100:0.2f}%"
+            f"{eval_metric.title()}: {best_score:0.4f}"
         )
         return DeepEosModel.load(str(base_path / "best_model.pt")).to(device)
     return model
 
 
 def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32, metric='precision',
-             device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")) -> float:
+             device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), verbose=True) -> float:
     """
     Evaluate the given model.
 
@@ -184,6 +199,7 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
     :param batch_size: The evaluation batch size.
     :param metric: The evaluation metric to return.
     :param device: See torch.device.
+    :param verbose: If False, disable tqdm progress bars.
     :return:
     """
     model.eval()
@@ -191,7 +207,7 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
     true_samples = []
     pred_samples = []
     dev_loader = DataLoader(datset, batch_size=batch_size, shuffle=True)
-    with tqdm(dev_loader, total=len(dev_loader), desc="Evaluating", position=0) as tq:
+    with tqdm(dev_loader, total=len(dev_loader), desc="Evaluating", ascii=True, disable=not verbose) as tq:
         for batch_no, (y_eval, x_eval) in enumerate(tq):
             true_samples.extend(y_eval.squeeze().bool().cpu().tolist())
             x_eval = x_eval.long().to(device)
@@ -202,9 +218,9 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
     precision = precision_score(true_samples, pred_samples, pos_label=True)
     recall = recall_score(true_samples, pred_samples, pos_label=True)
     f1 = f1_score(true_samples, pred_samples, pos_label=True)
-    print(f"Precision: {precision * 100:0.2f}%, "
-          f"Recall: {recall * 100:0.2f}%, "
-          f"F1: {f1 * 100:0.2f}%", flush=True)
+    print(f"Precision: {precision:0.4f}, "
+          f"Recall: {recall:0.4f}, "
+          f"F1: {f1:0.4f}", flush=True)
     if metric is 'recall':
         return recall
     elif metric is 'f1':
@@ -230,7 +246,7 @@ def tag(model: DeepEosModel, text_file: Union[str, Path], vocabulary_path: Union
     ret_idx = []
     model.eval()
     dataloader = DataLoader(dataset, batch_size=batch_size)
-    with tqdm(dataloader, total=len(dataloader), desc="Tagging") as tq:
+    with tqdm(dataloader, total=len(dataloader), desc="Tagging", ascii=True) as tq:
         for batch_no, (indices, x_tag) in enumerate(tq):
             x_tag = x_tag.long().to(device)
             prediction = model(x_tag) >= 0.5
