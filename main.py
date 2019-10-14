@@ -78,36 +78,23 @@ def train_europarl():
     model_name = 'eu_biofid'
     path = Path('europarl_biofid/')
     path.mkdir(exist_ok=True)
-    biofid_train = EosDataset(
-        'data/bioFID_train_cleaned.txt',
-        split_dev=True, save_vocab=path.joinpath(model_name + '.vocab'),
+    train_data = EosDataset(
+        ['data/bioFID_train_cleaned.txt', 'data/europarl-v7.de-en.de.sentences.train'],
+        split_dev=False, save_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
-    europarl_train = EosDataset(
-        'data/europarl-v7.de-en.de.sentences.train',
-        split_dev=False, load_vocab=path.joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-    train_data = ConcatDataset([biofid_train.train, europarl_train])
 
-    europarl_dev = EosDataset(
-        'data/europarl-v7.de-en.de.sentences.dev',
+    dev_data = EosDataset(
+        ['data/bioFID_dev.txt', 'data/europarl-v7.de-en.de.sentences.dev'],
         split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
-    dev_data = ConcatDataset([biofid_train.dev, europarl_dev])
 
-    biofid_test = EosDataset(
-        'data/bioFID_test.txt',
-        split_dev=False, load_vocab=path.joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-    europarl_test = EosDataset(
-        'data/europarl-v7.de-en.de.sentences.test',
+    test_data = EosDataset(
+        ['data/bioFID_test.txt', 'data/europarl-v7.de-en.de.sentences.test'],
         split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
-    test_data = ConcatDataset([biofid_test, europarl_test])
 
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
     model.to(device)
