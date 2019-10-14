@@ -138,6 +138,27 @@ class DeepEosDataParallel(nn.DataParallel):
         except AttributeError:
             return getattr(self.module, name)
 
+    def checkpoint(self, model_path: Union[str, Path]):
+        """
+        Create a checkpoint file a the given path.
+
+        :param model_path: The file path for the new checkpoint.
+        :return: None
+        """
+        model_dict = {
+            'hyper_params': {
+                'max_features': self.max_features,
+                'embedding_size': self.embdding_size,
+                'rnn_size': self.rnn_size,
+                'rnn_layers': self.rnn_layers,
+                'rnn_type': self.rnn_type,
+                'dropout': self.dropout,
+                'rnn_bidirectional': self.rnn_bidirectional
+            },
+            'state_dict': self.module.state_dict()
+        }
+        torch.save(model_dict, str(model_path), pickle_protocol=4)
+
     def load(self, model_path: Union[Path, str]):
         self.module.load(model_path)
 
