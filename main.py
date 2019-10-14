@@ -31,10 +31,9 @@ def train_multi():
     )
 
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
+    model.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    else:
-        model.to(device)
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -59,10 +58,9 @@ def train_leipzig():
     train_data, dev_data = leipzig.train, leipzig.dev
 
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
+    model.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    else:
-        model.to(device)
     print(model)
 
     # Pre-train on Leipzig corpus
@@ -112,10 +110,9 @@ def train_europarl():
     test_data = ConcatDataset([biofid_test, europarl_test])
 
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
+    model.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    else:
-        model.to(device)
     print(model)
 
     # Pre-train on Leipzig corpus
