@@ -24,6 +24,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class DeepEosModel(nn.Module):
+    dense: nn.Linear
+    _dropout: nn.Dropout
+    rnn: Union[nn.GRU, nn.LSTM]
+    emb: nn.Embedding
+
     def __init__(self, max_features=1000, embedding_size=128, rnn_type: str = 'LSTM', rnn_size=256,
                  dropout=0.2, rnn_layers=1, rnn_bidirectional=False):
         super(DeepEosModel, self).__init__()
@@ -37,10 +42,12 @@ class DeepEosModel(nn.Module):
         self.rnn_layers = rnn_layers
         self.rnn_bidirectional = rnn_bidirectional
 
-        # Layers
+        # Build model from hyper-parameters
+        self.build()
+
+    def build(self):
         self.emb = nn.Embedding(num_embeddings=self.max_features,
                                 embedding_dim=self.embdding_size)
-
         if self.rnn_type == 'lstm':
             self.rnn = nn.LSTM(input_size=self.embdding_size,
                                hidden_size=self.rnn_size,
@@ -48,7 +55,7 @@ class DeepEosModel(nn.Module):
                                dropout=self.dropout if self.rnn_layers > 1 else 0.0,
                                bidirectional=self.rnn_bidirectional,
                                batch_first=True)
-        elif str(rnn_type).lower() == 'gru':
+        elif self.rnn_type == 'gru':
             self.rnn = nn.GRU(input_size=self.embdding_size,
                               hidden_size=self.rnn_size,
                               num_layers=self.rnn_layers,
@@ -56,14 +63,14 @@ class DeepEosModel(nn.Module):
                               bidirectional=self.rnn_bidirectional,
                               batch_first=True)
         else:
-            raise NotImplementedError(f"'{rnn_type}' is not a valid RNN type choice. Please use: [LSTM, GRU]\n")
-
+            raise NotImplementedError(f"'{self.rnn_type}' is not a valid RNN type choice. Please use: [LSTM, GRU]")
         self._dropout = nn.Dropout(p=self.dropout)
         self.dense = nn.Linear(in_features=self.rnn_size * (2 if self.rnn_bidirectional else 1),
                                out_features=1)
 
     def forward(self, input: torch.Tensor):
         output = self.emb(input)
+        self.rnn.flatten_parameters()
         output, _ = self.rnn(output)
         output = self._dropout(output[:, -1, :].squeeze())
         output = self.dense(output)
@@ -90,8 +97,24 @@ class DeepEosModel(nn.Module):
         }
         torch.save(model_dict, str(model_path), pickle_protocol=4)
 
+    def load(self, model_path: Union[Path, str]):
+        if type(model_path) is str:
+            model_path = Path(model_path)
+        model_dict = torch.load(model_path)
+        for attr, value in model_dict['hyper_params'].items():
+            self.__setattr__(attr, value)
+        self.build()
+        self.load_state_dict(model_dict['state_dict'])
+        return self
+
     @staticmethod
-    def load(model_path: Union[Path, str]):
+    def from_file(model_path: Union[Path, str]) -> nn.Module:
+        """
+        Create a new DeepEosModel from a model saved using the checkpoint() method.
+
+        :param model_path: The file path of the saved model.
+        :return: A new DeepEosModel.
+        """
         if type(model_path) is str:
             model_path = Path(model_path)
 
@@ -144,7 +167,6 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
                 y_train = y_train.float().to(device)
                 x_train = x_train.long().to(device)
 
-                model.rnn.flatten_parameters()
                 prediction = model(x_train).squeeze()
 
                 optimizer.zero_grad()
@@ -185,7 +207,7 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
             "Loading best scoring model\n"
             f"{eval_metric.title()}: {best_score:0.4f}"
         )
-        return DeepEosModel.load(str(base_path / "best_model.pt")).to(device)
+        return DeepEosModel.from_file(str(base_path / "best_model.pt")).to(device)
     return model
 
 

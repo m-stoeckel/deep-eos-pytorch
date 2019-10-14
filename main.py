@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Union
 
 import torch
-from torch import optim as optim
+from torch import optim as optim, nn
+from torch.utils.data import ConcatDataset
 
 from dataset import EosDataset
 from model import DeepEosModel, train, evaluate
@@ -29,7 +30,11 @@ def train_multi():
         window_size=window_size
     )
 
-    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2).to(device)
+    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    else:
+        model.to(device)
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -54,13 +59,71 @@ def train_leipzig():
     train_data, dev_data = leipzig.train, leipzig.dev
 
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
-    model.to(device)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    else:
+        model.to(device)
     print(model)
 
     # Pre-train on Leipzig corpus
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     train(model, train_data, dev_data, batch_size=32, epochs=5,
           optimizer=optimizer, device=device, base_path='leipzig/')
+
+    return model
+
+
+def train_europarl():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    window_size = 6
+
+    model_name = 'eu_biofid'
+    path = Path('europarl_biofid/')
+    path.mkdir(exist_ok=True)
+    biofid_train = EosDataset(
+        'data/bioFID_train_cleaned.txt',
+        split_dev=True, save_vocab=path.joinpath(model_name + '.vocab'),
+        window_size=window_size, min_freq=10
+    )
+    europarl_train = EosDataset(
+        'data/europarl-v7.de-en.de.sentences.train',
+        split_dev=False, load_vocab=path.joinpath(model_name + '.vocab'),
+        window_size=window_size, min_freq=10
+    )
+    train_data = ConcatDataset([biofid_train.train, europarl_train])
+
+    europarl_dev = EosDataset(
+        'data/europarl-v7.de-en.de.sentences.dev',
+        split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
+        window_size=window_size, min_freq=10
+    )
+    dev_data = ConcatDataset([biofid_train.dev, europarl_dev])
+
+    biofid_test = EosDataset(
+        'data/bioFID_test.txt',
+        split_dev=False, load_vocab=path.joinpath(model_name + '.vocab'),
+        window_size=window_size, min_freq=10
+    )
+    europarl_test = EosDataset(
+        'data/europarl-v7.de-en.de.sentences.test',
+        split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
+        window_size=window_size, min_freq=10
+    )
+    test_data = ConcatDataset([biofid_test, europarl_test])
+
+    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    else:
+        model.to(device)
+    print(model)
+
+    # Pre-train on Leipzig corpus
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    train(model, train_data, dev_data, batch_size=32, epochs=5,
+          optimizer=optimizer, device=device, base_path=path)
+
+    evaluate(model, test_data, device=device)
 
     return model
 
@@ -102,22 +165,13 @@ def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cro
 
 
 def temp():
-    path = Path('multi.SETIMES2')
-    path.mkdir(exist_ok=True)
-    model = train_multi()
+    model = train_europarl()
     # model = str(path.joinpath('best_model.pt'))
     # model = DeepEosModel.load(model).cuda()
     # print(model)
-    vocab_path = Path('multi.SETIMES2/').joinpath('multi.SETIMES2.vocab')
+    vocab_path = Path('europarl_biofid/').joinpath('eu_biofid.vocab')
 
     evaluate_all(model, vocab_path)
-
-    # test_data = EosDataset(
-    #     glob.glob('data/SETIMES2.*.test'), shuffle_input=False, split_dev=False,
-    #     load_vocab=vocab_path,
-    #     window_size=6
-    # )
-    # fine_tune(model, vocab_path, test_data)
 
 
 def evaluate_all(model, vocab_path):
