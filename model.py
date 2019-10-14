@@ -196,11 +196,11 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
             if save_checkpoints and base_path is not None and score > best_score:
                 best_score = score
                 model_file = base_path / "best_model.pt"
-                model.checkpoint(model_file)
+                DeepEosModel.checkpoint(model, model_file)
 
         if save_checkpoints and base_path is not None:
             model_file = base_path / "last_model.pt"
-            model.checkpoint(model_file)
+            DeepEosModel.checkpoint(model, model_file)
 
     if epochs > 1 and evaluate_after_epoch and dev_dataset is not None and save_checkpoints and base_path is not None:
         print(
