@@ -124,6 +124,36 @@ class DeepEosModel(nn.Module):
         return model
 
 
+class DeepEosDataParallel(nn.DataParallel):
+    """
+    DeepEOS wrapper class for nn.DataParallel
+    """
+    def __init__(self, module: nn.Module[DeepEosModel]):
+        super(DeepEosDataParallel, self).__init__(module)
+
+    def __getattr__(self, name):
+        return getattr(self.module, name)
+
+    def load(self, model_path: Union[Path, str]):
+        self.module.load(model_path)
+
+    @staticmethod
+    def from_file(model_path: Union[Path, str]) -> nn.Module:
+        """
+        Create a new DeepEosModel from a model saved using the checkpoint() method.
+
+        :param model_path: The file path of the saved model.
+        :return: A new DeepEosModel.
+        """
+        if type(model_path) is str:
+            model_path = Path(model_path)
+
+        model_dict = torch.load(model_path)
+        model = DeepEosModel(**model_dict['hyper_params'])
+        model.load_state_dict(model_dict['state_dict'])
+        return DeepEosDataParallel(model)
+
+
 def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, epochs=5, batch_size=32,
           evaluate_after_epoch=True, eval_batch_size=32, base_path: Union[str, Path] = None, save_checkpoints=True,
           eval_metric='precision',

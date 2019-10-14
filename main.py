@@ -3,11 +3,10 @@ from pathlib import Path
 from typing import Union
 
 import torch
-from torch import optim as optim, nn
-from torch.utils.data import ConcatDataset
+from torch import optim as optim
 
-from dataset import EosDataset
-from model import DeepEosModel, train, evaluate
+from dataset import EosDataset, EosMultiDataset
+from model import DeepEosModel, train, evaluate, DeepEosDataParallel
 
 
 def train_multi():
@@ -17,14 +16,14 @@ def train_multi():
 
     print("### Loading data ###")
     print("Train data")
-    train_data = EosDataset(
+    train_data = EosMultiDataset(
         glob.glob('data/SETIMES2.*.train'), shuffle_input=False, split_dev=False,
         save_vocab=Path('multi.SETIMES2/').joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
 
     print("Dev data")
-    dev_data = EosDataset(
+    dev_data = EosMultiDataset(
         glob.glob('data/SETIMES2.*.dev'), shuffle_input=False, split_dev=False,
         load_vocab=Path('multi.SETIMES2/').joinpath(model_name + '.vocab'),
         window_size=window_size
@@ -33,7 +32,7 @@ def train_multi():
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
     model.to(device)
     if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+        model = DeepEosDataParallel(model)
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -60,7 +59,7 @@ def train_leipzig():
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
     model.to(device)
     if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+        model = DeepEosDataParallel(model)
     print(model)
 
     # Pre-train on Leipzig corpus
@@ -78,19 +77,19 @@ def train_europarl():
     model_name = 'eu_biofid'
     path = Path('europarl_biofid/')
     path.mkdir(exist_ok=True)
-    train_data = EosDataset(
+    train_data = EosMultiDataset(
         ['data/bioFID_train_cleaned.txt', 'data/europarl-v7.de-en.de.sentences.train'],
         split_dev=False, save_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
 
-    dev_data = EosDataset(
+    dev_data = EosMultiDataset(
         ['data/bioFID_dev.txt', 'data/europarl-v7.de-en.de.sentences.dev'],
         split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
     )
 
-    test_data = EosDataset(
+    test_data = EosMultiDataset(
         ['data/bioFID_test.txt', 'data/europarl-v7.de-en.de.sentences.test'],
         split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
         window_size=window_size, min_freq=10
@@ -99,7 +98,7 @@ def train_europarl():
     model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
     model.to(device)
     if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+        model = DeepEosDataParallel(model)
     print(model)
 
     # Pre-train on Leipzig corpus

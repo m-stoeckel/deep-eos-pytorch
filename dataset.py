@@ -19,7 +19,7 @@ class EosDataset(Dataset):
     PyTorch Dataset subclass for deep-eos.
     """
 
-    def __init__(self, train_path: Union[str, Iterable], split_dev=True, window_size=5, min_freq=1,
+    def __init__(self, train_path: Union[str, Path], split_dev=True, window_size=5, min_freq=1,
                  save_vocab: Path = None, load_vocab: Path = None, shuffle_input=True, shuffle_dev=True,
                  use_default_markers=True, remove_duplicates=True, verbose=True):
         """
@@ -39,37 +39,13 @@ class EosDataset(Dataset):
         """
         super(EosDataset, self).__init__()
 
-        if type(train_path) is str:
-            tq = tqdm(desc="Loading corpus", total=1, ascii=True, disable=not verbose)
-            with open(train_path, 'r', encoding='utf8') as f:
-                training_corpus = f.read()
-
-            if shuffle_input:
-                split = training_corpus.split("\n")
-                np.random.shuffle(split)
-                training_corpus = "\n".join(split)
-
-            data_set_char = EosDataset.build_data_set_char(training_corpus, window_size, use_default_markers)
-            tq.update()
-            tq.close()
-        else:
-            data_set_char = []
-            for path in tqdm(train_path, desc="Loading corpora", ascii=True, disable=not verbose):
-                with open(path, 'r', encoding='utf8') as f:
-                    training_corpus = f.read()
-
-                if shuffle_input:
-                    split = training_corpus.split("\n")
-                    np.random.shuffle(split)
-                    training_corpus = "\n".join(split)
-
-                data_set_char.extend(EosDataset.build_data_set_char(training_corpus, window_size, use_default_markers))
+        data_set_char = self.get_char_data(train_path, shuffle_input, window_size, use_default_markers, verbose)
 
         if remove_duplicates:
             data_set_char = list(dict.fromkeys(data_set_char))
 
         if load_vocab is None:
-            self.char_2_id_dict = EosDataset.build_char_2_id_dict(data_set_char, min_freq, verbose)
+            self.char_2_id_dict = self.build_char_2_id_dict(data_set_char, min_freq, verbose)
 
             if save_vocab is not None:
                 self.vocab_size = len(self.char_2_id_dict)
@@ -97,6 +73,25 @@ class EosDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
+
+    def get_char_data(self, train_path, shuffle_input, window_size, use_default_markers, verbose):
+        with tqdm(desc="Loading corpus", total=1, ascii=True, disable=not verbose) as tq:
+            with open(train_path, 'r', encoding='utf8') as f:
+                training_corpus = f.read()
+
+            if shuffle_input:
+                training_corpus = self.shuffle(training_corpus)
+
+            data_set_char = self.build_data_set_char(training_corpus, window_size, use_default_markers)
+            tq.update()
+        return data_set_char
+
+    @staticmethod
+    def shuffle(training_corpus):
+        split = training_corpus.split("\n")
+        np.random.shuffle(split)
+        training_corpus = "\n".join(split)
+        return training_corpus
 
     @staticmethod
     def build_char_2_id_dict(data_set_char, min_freq, verbose=True):
@@ -268,6 +263,25 @@ class EosDataset(Dataset):
         """
         with open(vocab_filename, 'rb') as f:
             self.char_2_id_dict = pickle.load(f)
+
+
+class EosMultiDataset(EosDataset):
+    def __init__(self, train_path: Iterable[Union[str, Path]], *args, **kwargs):
+        super(EosMultiDataset, self).__init__(train_path, *args, **kwargs)
+
+    def get_char_data(self, train_path: Iterable[Union[str, Path]], shuffle_input, window_size, use_default_markers,
+                      verbose):
+        data_set_char = []
+        for path in tqdm(train_path, desc="Loading corpora", ascii=True, disable=not verbose):
+            with open(path, 'r', encoding='utf8') as f:
+                training_corpus = f.read()
+
+            if shuffle_input:
+                training_corpus = self.shuffle(training_corpus)
+
+            data_set_char.extend(self.build_data_set_char(training_corpus, window_size, use_default_markers))
+
+        return data_set_char
 
 
 class ListDataset(Dataset):
