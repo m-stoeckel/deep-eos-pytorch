@@ -8,7 +8,7 @@ import numpy as np
 __author__ = 'Manuel Stoeckel'
 
 from pathlib import Path
-from typing import Union
+from typing import Union, T_co
 
 import torch
 import torch.nn as nn
@@ -128,7 +128,8 @@ class DeepEosDataParallel(nn.DataParallel):
     """
     DeepEOS wrapper class for nn.DataParallel
     """
-    def __init__(self, module: nn.Module[DeepEosModel]):
+
+    def __init__(self, module: nn.Module[T_co]):
         super(DeepEosDataParallel, self).__init__(module)
 
     def __getattr__(self, name):
