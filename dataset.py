@@ -54,7 +54,7 @@ class EosDataset(Dataset):
             tq.close()
         else:
             data_set_char = []
-            for path in tqdm(train_path, desc="Loading corpus", ascii=True, disable=not verbose):
+            for path in tqdm(train_path, desc="Loading corpora", ascii=True, disable=not verbose):
                 with open(path, 'r', encoding='utf8') as f:
                     training_corpus = f.read()
 
