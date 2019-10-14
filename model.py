@@ -133,7 +133,10 @@ class DeepEosDataParallel(nn.DataParallel):
         super(DeepEosDataParallel, self).__init__(module)
 
     def __getattr__(self, name):
-        return getattr(self.module, name)
+        try:
+            return super(DeepEosDataParallel, self).__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
 
     def load(self, model_path: Union[Path, str]):
         self.module.load(model_path)
