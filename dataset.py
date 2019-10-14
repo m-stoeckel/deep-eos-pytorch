@@ -123,6 +123,8 @@ class EosDataset(Dataset):
             char_2_id_table[k] = id_counter
             id_counter += 1
 
+        print(f"Vocabulary size: {len(char_2_id_table)}")
+
         return char_2_id_table
 
     @staticmethod
