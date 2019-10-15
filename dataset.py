@@ -46,12 +46,14 @@ class EosDataset(Dataset):
 
         if load_vocab is None:
             self.char_2_id_dict = self.build_char_2_id_dict(data_set_char, min_freq, verbose)
+            self.vocab_size = len(self.char_2_id_dict)
 
             if save_vocab is not None:
-                self.vocab_size = len(self.char_2_id_dict)
+                print(f"Saving vocabulary of size {self.vocab_size} to {save_vocab}")
                 self.save_vocab(save_vocab)
         else:
             self.load_vocab(load_vocab)
+            self.vocab_size = len(self.char_2_id_dict)
 
         self.data = self.build_data_set(data_set_char, self.char_2_id_dict, window_size)
         if split_dev:
@@ -122,8 +124,6 @@ class EosDataset(Dataset):
         for k, v in [(k, v) for k, v in char_freq.items() if v >= min_freq]:
             char_2_id_table[k] = id_counter
             id_counter += 1
-
-        print(f"Vocabulary size: {len(char_2_id_table)}")
 
         return char_2_id_table
 
