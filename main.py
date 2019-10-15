@@ -1,4 +1,5 @@
 import glob
+import os
 from pathlib import Path
 from typing import Union
 
@@ -7,108 +8,6 @@ from torch import optim as optim
 
 from dataset import EosDataset, EosMultiDataset
 from model import DeepEosModel, train, evaluate, DeepEosDataParallel
-
-
-def train_multi():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    window_size = 6
-    model_name = 'multi.SETIMES2'
-
-    print("### Loading data ###")
-    print("Train data")
-    train_data = EosMultiDataset(
-        glob.glob('data/SETIMES2.*.train'), shuffle_input=False, split_dev=False,
-        save_vocab=Path('multi.SETIMES2/').joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-
-    print("Dev data")
-    dev_data = EosMultiDataset(
-        glob.glob('data/SETIMES2.*.dev'), shuffle_input=False, split_dev=False,
-        load_vocab=Path('multi.SETIMES2/').joinpath(model_name + '.vocab'),
-        window_size=window_size
-    )
-
-    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
-    model.to(device)
-    if torch.cuda.device_count() > 1:
-        model = DeepEosDataParallel(model)
-    print(model)
-
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    print("### Training ###")
-    model = train(model, train_data, dev_data, batch_size=32, epochs=5,
-                  optimizer=optimizer, device=device, base_path='multi.SETIMES2/')
-
-    return model
-
-
-def train_leipzig():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    window_size = 6
-
-    model_name = 'de.leipzig'
-    leipzig = EosDataset(
-        'data/deu_wikipedia_2016_100K-formatted.txt',
-        split_dev=True, save_vocab=Path('leipzig/').joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-    train_data, dev_data = leipzig.train, leipzig.dev
-
-    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
-    model.to(device)
-    if torch.cuda.device_count() > 1:
-        model = DeepEosDataParallel(model)
-    print(model)
-
-    # Pre-train on Leipzig corpus
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train(model, train_data, dev_data, batch_size=32, epochs=5,
-          optimizer=optimizer, device=device, base_path='leipzig/')
-
-    return model
-
-
-def train_europarl():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    window_size = 6
-
-    model_name = 'eu_biofid'
-    path = Path('europarl_biofid/')
-    path.mkdir(exist_ok=True)
-    train_data = EosMultiDataset(
-        ['data/bioFID_train_cleaned.txt', 'data/europarl-v7.de-en.de.sentences.train'],
-        split_dev=False, save_vocab=path.joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-
-    dev_data = EosMultiDataset(
-        ['data/bioFID_dev.txt', 'data/europarl-v7.de-en.de.sentences.dev'],
-        split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-
-    test_data = EosMultiDataset(
-        ['data/bioFID_test.txt', 'data/europarl-v7.de-en.de.sentences.test'],
-        split_dev=True, load_vocab=path.joinpath(model_name + '.vocab'),
-        window_size=window_size, min_freq=10
-    )
-
-    model = DeepEosModel(rnn_bidirectional=True, dropout=0.2)
-    model.to(device)
-    if torch.cuda.device_count() > 1:
-        model = DeepEosDataParallel(model)
-    print(model)
-
-    # Pre-train on Leipzig corpus
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train(model, train_data, dev_data, batch_size=32, epochs=5,
-          optimizer=optimizer, device=device, base_path=path)
-
-    evaluate(model, test_data, device=device)
-
-    return model
 
 
 def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cross_validation_set=None):
@@ -144,61 +43,51 @@ def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cro
         evaluate(model, cross_validation_set, device=device)
 
     model_name = 'de.biofid'
-    torch.save(model, Path('biofid_models/').joinpath(model_name + '.h5'))
+    torch.save(model, Path('biofid_models/').joinpath(model_name + '.pt'))
 
 
-def temp():
-    model = train_europarl()
-    # model = str(path.joinpath('best_model.pt'))
-    # model = DeepEosModel.load(model).cuda()
-    # print(model)
-    vocab_path = Path('europarl_biofid/').joinpath('eu_biofid.vocab')
+def train_all():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    base_path = Path("models")
+    base_path.mkdir(exist_ok=True)
+    files = list(glob.glob('data/europarl-v7.*.train')) + glob.glob('data/SETIMES2.*.train')
 
-    evaluate_all(model, vocab_path)
+    # LSTM
+    for train_file in files:
+        run_training(train_file, base_path, device, False)
+    # BiLSTM
+    for train_file in files:
+        run_training(train_file, base_path, device, True)
 
 
-def evaluate_all(model, vocab_path):
-    print("### Evaluation ###")
+def run_training(train_file, base_path, device, bidirectional=False):
+    corpus_name = os.path.split(train_file)[1].replace('.train', '')
+    print(f"Training with {corpus_name}")
+    model_name = corpus_name + ("_LSTM" if not bidirectional else "_BiLSTM")
+    model_path = base_path.joinpath(model_name)
+    model_path.mkdir(exist_ok=True)
+    dev_file = train_file.replace(".train", ".dev")
+    test_file = train_file.replace(".train", ".test")
+    print(f"Loading {train_file}")
+    train_data = EosDataset(train_file, split_dev=False, min_freq=10000, remove_duplicates=False,
+                            save_vocab=model_path.joinpath("vocab.pickle"))
+    print(f"Loading {dev_file}")
+    dev_data = EosDataset(dev_file, split_dev=False, min_freq=10000, remove_duplicates=False,
+                          load_vocab=model_path.joinpath("vocab.pickle"))
+    print(f"Loading {test_file}")
+    test_data = EosDataset(test_file, split_dev=False, min_freq=10000, remove_duplicates=False,
+                           load_vocab=model_path.joinpath("vocab.pickle"))
+    model = DeepEosModel(max_features=20000, rnn_bidirectional=bidirectional)
+    print(model)
 
-    test_data = EosDataset(
-        'data/deu_wikipedia_2016_10K-formatted.txt', shuffle_input=True, split_dev=False,
-        load_vocab=vocab_path, window_size=6, verbose=False
-    )
-    print("### Evaluating Leipzig Wiki Corpus ###")
-    evaluate(model, test_data, verbose=False)
-
-    test_data = EosDataset(
-        'data/deu_mixed-typical_2011_30K-formatted.txt', shuffle_input=True, split_dev=False,
-        load_vocab=vocab_path, window_size=6, verbose=False
-    )
-    print("### Evaluating Leipzig Mixed-Typical Corpus ###")
-    evaluate(model, test_data, verbose=False)
-
-    print("### Evaluating SETimes2 Corpus ###")
-    for path in glob.glob('data/SETIMES2.*.test'):
-        print(path)
-        test_data = EosDataset(
-            path, shuffle_input=False, split_dev=False,
-            load_vocab=vocab_path, window_size=6, verbose=False
-        )
-        print(path)
-        evaluate(model, test_data, verbose=False)
-
-    print("### Evaluating EUROPARL Corpus ###")
-    for path in glob.glob('data/europarl-v7.*.test'):
-        print(path)
-        test_data = EosDataset(
-            path, shuffle_input=False, split_dev=False,
-            load_vocab=vocab_path, window_size=6, verbose=False
-        )
-        print(path)
-        evaluate(model, test_data, verbose=False)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    print("Starting Traning")
+    train(model, train_data, dev_data, base_path=model_path, optimizer=optimizer, epochs=5, device=device)
+    print("Evaluating")
+    with open(model_path.joinpath("evaluation.txt"), 'w', encoding='UTF-8') as f:
+        precision, recall, f1 = evaluate(model, test_data, device=device)
+        f.write(f"Precision: {precision}\nRecall: {recall}\nF1: {f1}\n")
 
 
 if __name__ == '__main__':
-    temp()
-    # model = str(Path('multi.SETIMES2').joinpath('best_model.pt'))
-    # model = DeepEosModel.load(model).cuda()
-    # print(model)
-    #
-    # print(tag(model, 'data/plain.txt', vocabulary_path='multi.SETIMES2/multi.SETIMES2.vocab', window_size=6))
+    train_all()

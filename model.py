@@ -8,7 +8,7 @@ import numpy as np
 __author__ = 'Manuel Stoeckel'
 
 from pathlib import Path
-from typing import Union
+from typing import Union, List
 
 import torch
 import torch.nn as nn
@@ -246,7 +246,8 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
 
         if evaluate_after_epoch and dev_dataset is not None:
             print("Development dataset - ", end="")
-            score = evaluate(model, dev_dataset, eval_batch_size, metric=eval_metric, device=device, verbose=False)
+            score = get_score(model, dev_dataset, batch_size=eval_batch_size, metric=eval_metric, device=device,
+                              verbose=False)
 
             if save_checkpoints and base_path is not None and score > best_score:
                 best_score = score
@@ -266,13 +267,13 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
     return model
 
 
-def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32, metric='precision',
-             device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), verbose=True) -> float:
+def evaluate(model: DeepEosModel, dataset: Union[EosDataset, list], batch_size=32, verbose=True,
+             device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")) -> tuple:
     """
     Evaluate the given model.
 
     :param model: The model to evaluate.
-    :param datset: The evaluation dataset.
+    :param dataset: The evaluation dataset.
     :param batch_size: The evaluation batch size.
     :param metric: The evaluation metric to return.
     :param device: See torch.device.
@@ -283,7 +284,7 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
 
     true_samples = []
     pred_samples = []
-    dev_loader = DataLoader(datset, batch_size=batch_size, shuffle=True)
+    dev_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     with tqdm(dev_loader, total=len(dev_loader), desc="Evaluating", ascii=True, disable=not verbose) as tq:
         for batch_no, (y_eval, x_eval) in enumerate(tq):
             true_samples.extend(y_eval.squeeze().bool().cpu().tolist())
@@ -298,6 +299,12 @@ def evaluate(model: DeepEosModel, datset: Union[EosDataset, list], batch_size=32
     print(f"Precision: {precision:0.4f}, "
           f"Recall: {recall:0.4f}, "
           f"F1: {f1:0.4f}", flush=True)
+    return (precision, recall, f1)
+
+
+def get_score(model: DeepEosModel, dataset: Union[EosDataset, list], metric: Union[str, List[str]] = 'precision',
+              *args, **kwargs) -> float:
+    precision, recall, f1 = evaluate(model, dataset, *args, **kwargs)
     if metric is 'recall':
         return recall
     elif metric is 'f1':
