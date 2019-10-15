@@ -217,7 +217,7 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
         total_batches = len(train_loader)
         loss_meter = AverageMeter()
         score_meter = AverageMeter()
-        with tqdm(train_loader, total=total_batches, desc=f"Epoch {epoch + 1}", ascii=True) as tq:
+        with tqdm(train_loader, total=total_batches, desc=f"Epoch {epoch + 1}", ascii=True, miniters=10) as tq:
             for batch_no, (y_train, x_train) in enumerate(tq):
                 y_train = y_train.float().to(device)
                 x_train = x_train.long().to(device)
