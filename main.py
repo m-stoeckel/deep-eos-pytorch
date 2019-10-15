@@ -1,5 +1,6 @@
 import glob
 import os
+import sys
 from pathlib import Path
 from typing import Union
 
@@ -46,11 +47,25 @@ def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cro
     torch.save(model, Path('biofid_models/').joinpath(model_name + '.pt'))
 
 
-def train_all():
+def train_europarl():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     base_path = Path("models")
     base_path.mkdir(exist_ok=True)
-    files = list(glob.glob('data/europarl-v7.*.train')) + glob.glob('data/SETIMES2.*.train')
+    files = list(glob.glob('data/europarl-v7.*.train'))
+
+    # LSTM
+    for train_file in files:
+        run_training(train_file, base_path, device, False)
+    # BiLSTM
+    for train_file in files:
+        run_training(train_file, base_path, device, True)
+
+
+def train_setimes():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    base_path = Path("models")
+    base_path.mkdir(exist_ok=True)
+    files = glob.glob('data/SETIMES2.*.train')
 
     # LSTM
     for train_file in files:
@@ -91,4 +106,10 @@ def run_training(train_file, base_path, device, bidirectional=False):
 
 
 if __name__ == '__main__':
-    train_all()
+    if sys.argv[1].strip().lower().startswith('europarl'):
+        train_europarl()
+    elif sys.argv[1].strip().lower().startswith("setimes"):
+        train_setimes()
+    else:
+        train_europarl()
+        train_setimes()
