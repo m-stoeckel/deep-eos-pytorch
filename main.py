@@ -78,6 +78,7 @@ def run_training(train_file, base_path, device, bidirectional=False):
     test_data = EosDataset(test_file, split_dev=False, min_freq=10000, remove_duplicates=False,
                            load_vocab=model_path.joinpath("vocab.pickle"))
     model = DeepEosModel(max_features=20000, rnn_bidirectional=bidirectional)
+    model.to(device)
     print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
