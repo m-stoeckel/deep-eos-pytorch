@@ -81,13 +81,13 @@ def run_training(train_file, base_path, device, bidirectional=False):
     test_file = train_file.replace(".train", ".test")
     print(f"Loading {train_file}")
     train_data = EosDataset(train_file, split_dev=False, min_freq=10000, save_vocab=model_path.joinpath("vocab.pickle"),
-                            remove_duplicates=False)
+                            remove_duplicates=False, shuffle_input=False)
     print(f"Loading {dev_file}")
     dev_data = EosDataset(dev_file, split_dev=False, min_freq=10000, load_vocab=model_path.joinpath("vocab.pickle"),
-                          remove_duplicates=False)
+                          remove_duplicates=False, shuffle_input=False)
     print(f"Loading {test_file}")
     test_data = EosDataset(test_file, split_dev=False, min_freq=10000, load_vocab=model_path.joinpath("vocab.pickle"),
-                           remove_duplicates=False)
+                           remove_duplicates=False, shuffle_input=False)
     model = DeepEosModel(max_features=20000, rnn_bidirectional=bidirectional)
     model.to(device)
     print(model)

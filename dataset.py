@@ -21,7 +21,7 @@ class EosDataset(Dataset):
     """
 
     def __init__(self, train_path: Union[str, Path], split_dev=True, split_test=False, window_size=5, min_freq=1,
-                 save_vocab: Path = None, load_vocab: Path = None, shuffle_input=True, shuffle_dev=True,
+                 save_vocab: Path = None, load_vocab: Path = None, shuffle_input=False, shuffle_dev=True,
                  use_default_markers=True, remove_duplicates=True, verbose=True):
         """
         PyTorch Dataset subclass for deep-eos.
