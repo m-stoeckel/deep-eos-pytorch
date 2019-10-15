@@ -106,10 +106,10 @@ def run_training(train_file, base_path, device, bidirectional=False):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        train_europarl()
+        train_setimes()
     if sys.argv[1].strip().lower().startswith('europarl'):
         train_europarl()
     elif sys.argv[1].strip().lower().startswith("setimes"):
-        train_setimes()
-    else:
-        train_europarl()
         train_setimes()
