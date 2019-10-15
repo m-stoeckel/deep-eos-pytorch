@@ -19,14 +19,10 @@ def fine_tune(model: Union[DeepEosModel, str], vocab_path: Union[str, Path], cro
         model = torch.load(str(model), map_location=device)
 
     # BIOfid fine-tuning
-    biofid_train = EosDataset(
-        'data/bioFID_train_cleaned.txt', shuffle_input=False,
-        split_dev=False, load_vocab=vocab_path, window_size=window_size
-    )
-    biofid_test = EosDataset(
-        'data/bioFID_test.txt', shuffle_input=False,
-        split_dev=False, load_vocab=vocab_path, window_size=window_size
-    )
+    biofid_train = EosDataset('data/bioFID_train_cleaned.txt', split_dev=False, window_size=window_size,
+                              load_vocab=vocab_path, shuffle_input=False)
+    biofid_test = EosDataset('data/bioFID_test.txt', split_dev=False, window_size=window_size, load_vocab=vocab_path,
+                             shuffle_input=False)
 
     print("\nBIOfid test scores prior to fine-tuning")
     evaluate(model, biofid_test, device=device)
@@ -84,14 +80,14 @@ def run_training(train_file, base_path, device, bidirectional=False):
     dev_file = train_file.replace(".train", ".dev")
     test_file = train_file.replace(".train", ".test")
     print(f"Loading {train_file}")
-    train_data = EosDataset(train_file, split_dev=False, min_freq=10000, remove_duplicates=False,
-                            save_vocab=model_path.joinpath("vocab.pickle"))
+    train_data = EosDataset(train_file, split_dev=False, min_freq=10000, save_vocab=model_path.joinpath("vocab.pickle"),
+                            remove_duplicates=False)
     print(f"Loading {dev_file}")
-    dev_data = EosDataset(dev_file, split_dev=False, min_freq=10000, remove_duplicates=False,
-                          load_vocab=model_path.joinpath("vocab.pickle"))
+    dev_data = EosDataset(dev_file, split_dev=False, min_freq=10000, load_vocab=model_path.joinpath("vocab.pickle"),
+                          remove_duplicates=False)
     print(f"Loading {test_file}")
-    test_data = EosDataset(test_file, split_dev=False, min_freq=10000, remove_duplicates=False,
-                           load_vocab=model_path.joinpath("vocab.pickle"))
+    test_data = EosDataset(test_file, split_dev=False, min_freq=10000, load_vocab=model_path.joinpath("vocab.pickle"),
+                           remove_duplicates=False)
     model = DeepEosModel(max_features=20000, rnn_bidirectional=bidirectional)
     model.to(device)
     print(model)

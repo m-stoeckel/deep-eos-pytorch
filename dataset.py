@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Union, Iterable, List
 
 import numpy as np
+import torch
 from torch.utils.data import Dataset, Subset
 from tqdm import tqdm
 
@@ -19,7 +20,7 @@ class EosDataset(Dataset):
     PyTorch Dataset subclass for deep-eos.
     """
 
-    def __init__(self, train_path: Union[str, Path], split_dev=True, window_size=5, min_freq=1,
+    def __init__(self, train_path: Union[str, Path], split_dev=True, split_test=False, window_size=5, min_freq=1,
                  save_vocab: Path = None, load_vocab: Path = None, shuffle_input=True, shuffle_dev=True,
                  use_default_markers=True, remove_duplicates=True, verbose=True):
         """
@@ -56,16 +57,19 @@ class EosDataset(Dataset):
             self.vocab_size = len(self.char_2_id_dict)
 
         self.data = self.build_data_set(data_set_char, self.char_2_id_dict, window_size)
-        if split_dev:
-            subset_len = int(len(self.data) / 10) * 9
-            indices = np.arange(len(self.data))
-            if shuffle_dev:
-                np.random.shuffle(indices)
-            self.train = Subset(self, indices[:subset_len])
-            self.dev = Subset(self, indices[subset_len:])
-        else:
-            self.train = self.data
+        tenth = int(len(self.data) / 10)
+        if split_dev and split_test:
+            self.train, self.dev, self.test = torch.utils.data.random_split(self, [tenth * 8, tenth, tenth])
+        elif split_dev:
+            self.train, self.dev = torch.utils.data.random_split(self, [tenth * 9, tenth])
+            self.test = None
+        elif split_test:
+            self.train, self.test = torch.utils.data.random_split(self, [tenth * 9, tenth])
             self.dev = None
+        else:
+            self.train = self
+            self.dev = None
+            self.test = None
 
     def __getitem__(self, index):
         return self.data[index]
