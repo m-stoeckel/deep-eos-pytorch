@@ -86,8 +86,8 @@ def run_training(train_file, base_path, device, bidirectional=False):
     train(model, train_data, dev_data, base_path=model_path, optimizer=optimizer, epochs=5, device=device)
     print("Evaluating")
     with open(model_path.joinpath("evaluation.txt"), 'w', encoding='UTF-8') as f:
-        precision, recall, f1 = evaluate(model, test_data, device=device)
-        f.write(f"Precision: {precision}\nRecall: {recall}\nF1: {f1}\n")
+        precision, recall, f1, accuracy = evaluate(model, test_data, device=device)
+        f.write(f"Precision: {precision}\nRecall: {recall}\nF1: {f1}\nAccuracy: {accuracy}\n")
 
 
 if __name__ == '__main__':

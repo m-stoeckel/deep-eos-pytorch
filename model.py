@@ -13,7 +13,7 @@ from typing import Union, List
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -181,8 +181,7 @@ class DeepEosDataParallel(nn.DataParallel):
 
 def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, epochs=5, batch_size=32,
           evaluate_after_epoch=True, eval_batch_size=32, base_path: Union[str, Path] = None, save_checkpoints=True,
-          eval_metric='precision',
-          device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")) -> DeepEosModel:
+          eval_metric='accuracy', device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")) -> DeepEosModel:
     """
     Train the given DeepEosModel with the given datasets using Binary-Cross-Entropy loss.
 
@@ -236,8 +235,10 @@ def train(model: DeepEosModel, train_dataset, dev_dataset=None, optimizer=None, 
                         score = precision_score(y_eval, pred_eval, pos_label=True)
                     elif eval_metric is 'recall':
                         score = recall_score(y_eval, pred_eval, pos_label=True)
-                    else:
+                    elif eval_metric is 'f1':
                         score = f1_score(y_eval, pred_eval, pos_label=True)
+                    else:
+                        score = accuracy_score(y_eval, pred_eval)
 
                 loss_meter.update(loss.item())
                 score_meter.update(score)
@@ -296,21 +297,25 @@ def evaluate(model: DeepEosModel, dataset: Union[EosDataset, list], batch_size=3
     precision = precision_score(true_samples, pred_samples, pos_label=True)
     recall = recall_score(true_samples, pred_samples, pos_label=True)
     f1 = f1_score(true_samples, pred_samples, pos_label=True)
+    accuracy = accuracy_score(true_samples, pred_samples)
     print(f"Precision: {precision:0.4f}, "
           f"Recall: {recall:0.4f}, "
-          f"F1: {f1:0.4f}", flush=True)
-    return (precision, recall, f1)
+          f"F1: {f1:0.4f}, "
+          f"Accuracy: {accuracy:0.4f}", flush=True)
+    return precision, recall, f1, accuracy
 
 
 def get_score(model: DeepEosModel, dataset: Union[EosDataset, list], metric: Union[str, List[str]] = 'precision',
               *args, **kwargs) -> float:
-    precision, recall, f1 = evaluate(model, dataset, *args, **kwargs)
+    precision, recall, f1, accuracy = evaluate(model, dataset, *args, **kwargs)
     if metric is 'recall':
         return recall
     elif metric is 'f1':
         return f1
-    else:
+    elif metric is 'precision':
         return precision
+    else:
+        return accuracy
 
 
 def tag(model: DeepEosModel, text_file: Union[str, Path], vocabulary_path: Union[str, Path], batch_size=32,
