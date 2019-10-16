@@ -288,11 +288,11 @@ def evaluate(model: DeepEosModel, dataset: Union[EosDataset, list], batch_size=3
     dev_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     with tqdm(dev_loader, total=len(dev_loader), desc="Evaluating", ascii=True, disable=not verbose) as tq:
         for batch_no, (y_eval, x_eval) in enumerate(tq):
-            true_samples.extend(y_eval.squeeze().bool().cpu().tolist())
+            true_samples.extend(y_eval.view(-1).bool().cpu().tolist())
             x_eval = x_eval.long().to(device)
 
             prediction = model(x_eval) >= 0.5
-            pred_samples.extend(prediction.squeeze().bool().cpu().tolist())
+            pred_samples.extend(prediction.view(-1).bool().cpu().tolist())
 
     precision = precision_score(true_samples, pred_samples, pos_label=True)
     recall = recall_score(true_samples, pred_samples, pos_label=True)
