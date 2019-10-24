@@ -91,6 +91,7 @@ def run_training(train_file, base_path, device, bidirectional=False):
     model = DeepEosModel(max_features=20000, rnn_bidirectional=bidirectional)
     model.to(device)
     print(model)
+    print(f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     print("Starting Traning")
